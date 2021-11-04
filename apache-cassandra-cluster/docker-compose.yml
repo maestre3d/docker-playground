@@ -1,0 +1,53 @@
+version: "3.7"
+services:
+  cassandra-node0:
+    image: "cassandra:latest"
+    healthcheck:
+      test: [ "CMD", "cqlsh", "-e", "describe keyspaces" ]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    ports:
+      - '9042:9042'
+    volumes:
+      - ./third-party/cassandra/data/node0:/var/lib/cassandra
+      - ./third-party/cassandra/etc/node0:/etc/cassandra
+    environment: &environment
+      CASSANDRA_SEEDS: "cassandra-node0,cassandra-node1"    # The first two nodes will be seeds
+      CASSANDRA_CLUSTER_NAME: ncorp_cassandra_cluster
+      CASSANDRA_DC: US
+      CASSANDRA_RACK: West
+      CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
+      CASSANDRA_NUM_TOKENS: 128
+
+  cassandra-node1:
+    image: "cassandra:latest"
+    healthcheck:
+      test: [ "CMD", "cqlsh", "-e", "describe keyspaces" ]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    ports:
+      - '9043:9042'
+    volumes:
+      - ./third-party/cassandra/data/node1:/var/lib/cassandra
+      - ./third-party/cassandra/etc/node1:/etc/cassandra
+    environment: *environment
+    depends_on:
+      - cassandra-node0
+  
+  cassandra-node2:
+    image: "cassandra:latest"
+    healthcheck:
+      test: [ "CMD", "cqlsh", "-e", "describe keyspaces" ]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    ports:
+      - '9044:9042'
+    volumes:
+      - ./third-party/cassandra/data/node2:/var/lib/cassandra
+      - ./third-party/cassandra/etc/node2:/etc/cassandra
+    environment: *environment
+    depends_on:
+      - cassandra-node1
