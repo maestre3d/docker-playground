@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: coinlog-postgres-secret
+  namespace: coinlog
+  labels:
+    app: coinlog-postgres
+type: Opaque
+stringData:
+  superUserPassword: root
+  replicationUserPassword: root
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coinlog-postgres-config
+  namespace: coinlog
+  labels:
+    app: coinlog-postgres
+data:
+  db_name: 'coinlog'
+---
+apiVersion: kubegres.reactive-tech.io/v1
+kind: Kubegres
+metadata:
+  name: coinlog-postgres
+  namespace: coinlog
+  labels:
+    app: coinlog-postgres
+spec:
+  # ref: https://www.kubegres.io/doc/properties-explained.html
+  replicas: 3
+  image: postgres:14.1
+  database:
+    size: 200Mi
+  env:
+    - name: POSTGRES_DB
+      valueFrom:
+        configMapKeyRef:
+          key: db_name
+          name: coinlog-postgres-config
+    - name: POSTGRES_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: coinlog-postgres-secret
+          key: superUserPassword
+    - name: POSTGRES_REPLICATION_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: coinlog-postgres-secret
+          key: replicationUserPassword
