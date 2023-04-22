@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: kafka-pv-volume
+  labels:
+    type: local
+    app: coinlog-kafka
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: '/mnt/data'
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kafka-pv-claim
+  namespace: coinlog
+  labels:
+    app: coinlog-kafka
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-svc
+  labels:
+    app: coinlog-kafka
+  namespace: coinlog
+spec:
+  clusterIP: None
+  ports:
+    - name: '9092'
+      port: 9092
+      protocol: TCP
+      targetPort: 9092
+  selector:
+    app: coinlog-kafka
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  labels:
+    app: coinlog
+  namespace: coinlog
+spec:
+  serviceName: kafka-svc
+  replicas: 3
+  selector:
+    matchLabels:
+      app: coinlog-kafka
+  template:
+    metadata:
+      labels:
+        app: coinlog-kafka
+    spec:
+      volumes:
+        - name: kafka-storage
+          persistentVolumeClaim:
+            claimName: kafka-pv-claim
+      containers:
+        - name: kafka-container
+          image: coinlog/kafka-kraft
+          imagePullPolicy: Never # REMOVE IF USING REMOTE-STORED IMAGE
+          ports:
+            - containerPort: 9092
+            - containerPort: 9093
+          env:
+            - name: REPLICAS
+              value: '3'
+            - name: SERVICE
+              value: kafka-svc
+            - name: NAMESPACE
+              value: coinlog
+            - name: SHARE_DIR
+              value: /mnt/kafka
+          volumeMounts:
+            - name: kafka-storage
+              mountPath: /mnt/kafka
