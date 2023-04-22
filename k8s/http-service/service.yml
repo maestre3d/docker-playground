@@ -1,0 +1,125 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: coinlog-http-api-secret
+  namespace: coinlog
+  labels:
+    app: coinlog-http-api
+type: Opaque
+stringData:
+  db_conn_string: 'host=coinlog-postgres.coinlog.svc.cluster.local port=5432 user=postgres dbname=coinlog password=root sslmode=disable'
+  redis_pwd: 'foo'
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coinlog-http-api-config
+  namespace: coinlog
+  labels:
+    app: coinlog-http-api
+data:
+  app_major_version: '1'
+  server_port: ':8080'
+  server_path: '/v%d'
+  kafka_address: 'kafka-svc.coinlog.svc.cluster.local:9092'
+  redis_address: 'coinlog-redis.coinlog.svc.cluster.local:6379'
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coinlog-http-api
+  namespace: coinlog
+  labels:
+    app: coinlog-http-api
+spec:
+  replicas: 3
+  revisionHistoryLimit: 10
+  minReadySeconds: 5
+  selector:
+    matchLabels:
+      app: coinlog-http-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 2
+  template:
+    metadata:
+      labels:
+        app: coinlog-http-api
+        tier: application
+    spec:
+      containers:
+        - name: coinlog
+          image: coinlog/http-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 125m
+            limits:
+              memory: 128Mi
+              cpu: 250m
+          readinessProbe:
+            # TODO: Add readiness-specific endpoint to app
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+          env:
+            - name: NCORP_APPLICATION_MAJOR_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: coinlog-http-api-config
+                  key: app_major_version
+            - name: NCORP_MESSAGING_KAFKA_ADDRESS
+              valueFrom:
+                configMapKeyRef:
+                  name: coinlog-http-api-config
+                  key: kafka_address
+            - name: NCORP_DATABASE_CACHING_REDIS_ADDRESS
+              valueFrom:
+                configMapKeyRef:
+                  name: coinlog-http-api-config
+                  key: redis_address
+            - name: NCORP_SERVER_HTTP_LISTEN_ADDRESS
+              valueFrom:
+                configMapKeyRef:
+                  name: coinlog-http-api-config
+                  key: server_port
+            - name: NCORP_SERVER_HTTP_ROOT_PATH_FORMAT
+              valueFrom:
+                configMapKeyRef:
+                  name: coinlog-http-api-config
+                  key: server_path
+            - name: NCORP_DATABASE_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: coinlog-http-api-secret
+                  key: db_conn_string
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: coinlog-http-api-svc
+  namespace: coinlog
+  labels:
+    app: coinlog-http-api
+spec:
+  type: NodePort
+  ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    app: coinlog-http-api
