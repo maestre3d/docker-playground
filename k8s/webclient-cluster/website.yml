@@ -1,0 +1,81 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coinlog-web-client-config
+  namespace: coinlog
+  labels:
+    app: coinlog-web-client
+data:
+  APP_ENV: 'production'
+  APP_PORT: '3000'
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: coinlog
+  name: coinlog-web-client
+  labels:
+    app: coinlog-web-client
+spec:
+  replicas: 3
+  minReadySeconds: 5
+  revisionHistoryLimit: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 2
+  selector:
+    matchLabels:
+      app: coinlog-web-client
+  template:
+    metadata:
+      labels:
+        app: coinlog-web-client
+        tier: client
+    spec:
+      containers:
+        - name: coinlog-web
+          imagePullPolicy: IfNotPresent
+          image: coinlog/web-client:latest
+          ports:
+            - containerPort: 3000
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 125m
+            limits:
+              memory: 128Mi
+              cpu: 250m
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            timeoutSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            timeoutSeconds: 10
+          envFrom:
+            - configMapRef:
+                name: coinlog-web-client-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: coinlog-web-client-svc
+  namespace: coinlog
+  labels:
+    app: coinlog-web-client
+spec:
+  type: NodePort
+  ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 3000
+  selector:
+    app: coinlog-web-client
