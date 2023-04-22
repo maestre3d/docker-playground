@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: coinlog-pgadmin-pv
+  namespace: coinlog
+  labels:
+    app: coinlog-pgadmin
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: coinlog-pgadmin-secret
+  namespace: coinlog
+  labels:
+    app: coinlog-pgadmin
+type: Opaque
+stringData:
+  admin_pass: 'root'
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coinlog-pgadmin-config
+  namespace: coinlog
+  labels:
+    app: coinlog-pgadmin
+data:
+  listen_port: '80'
+  default_email: 'admin@coinlog.info'
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coinlog-pgadmin
+  namespace: coinlog
+  labels:
+    app: coinlog-pgadmin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: coinlog-pgadmin
+  template:
+    metadata:
+      labels:
+        app: coinlog-pgadmin
+        tier: admin
+    spec:
+      initContainers:
+        - name: coinlog-pgadmin-pv-fix
+          image: busybox
+          command: ['/bin/chown', '-R', '5050:5050', '/var/lib/pgadmin']
+          volumeMounts:
+            - mountPath: /var/lib/pgadmin
+              name: coinlog-pgadmin-data
+      containers:
+        - name: coinlog-pgadmin
+          image: dpage/pgadmin4
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - mountPath: /var/lib/pgadmin
+              name: coinlog-pgadmin-data
+          env:
+            - name: PGADMIN_LISTEN_PORT
+              valueFrom:
+                configMapKeyRef:
+                  key: listen_port
+                  name: coinlog-pgadmin-config
+            - name: PGADMIN_DEFAULT_EMAIL
+              valueFrom:
+                configMapKeyRef:
+                  key: default_email
+                  name: coinlog-pgadmin-config
+            - name: PGADMIN_DEFAULT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: admin_pass
+                  name: coinlog-pgadmin-secret
+      volumes:
+        - name: coinlog-pgadmin-data
+          persistentVolumeClaim:
+            claimName: coinlog-pgadmin-pv
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: coinlog-pgadmin-svc
+  namespace: coinlog
+  labels:
+    app: coinlog-pgadmin
+spec:
+  type: NodePort
+  ports:
+    - port: 80
+      name: http
+      protocol: TCP
+      targetPort: 80
+  selector:
+    app: coinlog-pgadmin
