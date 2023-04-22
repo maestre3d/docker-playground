@@ -16,6 +16,9 @@ metadata:
     tier: edge
 spec:
   rules:
+  # Requires /etc/host line append with the following host name
+  # Example:
+  # 127.0.0.1 pgadmin.db.coinlog.info
     - host: pgadmin.db.coinlog.info
       http:
         paths:
